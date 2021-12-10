@@ -6,8 +6,8 @@ package render
 
 import (
 	"fmt"
-	"io"
 	"github.com/xupingao/go-easy-adapt/http"
+	"io"
 )
 
 // String contains the given interface object slice and its format.

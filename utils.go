@@ -6,7 +6,6 @@ package gonight
 
 import (
 	"encoding/xml"
-	"net/http"
 	"os"
 	"path"
 	"reflect"
@@ -34,20 +33,20 @@ func Bind(val interface{}) HandlerFunc {
 		}
 	}
 }
-
-// WrapF is a helper function for wrapping http.HandlerFunc and returns a Gin middleware.
-func WrapF(f http.HandlerFunc) HandlerFunc {
-	return func(c *Context) {
-		f(c.Writer, c.Request)
-	}
-}
-
-// WrapH is a helper function for wrapping http.Handler and returns a Gin middleware.
-func WrapH(h http.Handler) HandlerFunc {
-	return func(c *Context) {
-		h.ServeHTTP(c.Writer, c.Request)
-	}
-}
+// todo
+//// WrapF is a helper function for wrapping http.HandlerFunc and returns a Gin middleware.
+//func WrapF(f http.HandlerFunc) HandlerFunc {
+//	return func(c *Context) {
+//		f(c.Writer, c.Request)
+//	}
+//}
+//
+//// WrapH is a helper function for wrapping http.Handler and returns a Gin middleware.
+//func WrapH(h http.Handler) HandlerFunc {
+//	return func(c *Context) {
+//		h.ServeHTTP(c.Writer, c.Request)
+//	}
+//}
 
 // H is a shortcut for map[string]interface{}
 type H map[string]interface{}

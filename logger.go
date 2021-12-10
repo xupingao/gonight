@@ -7,7 +7,7 @@ package gonight
 import (
 	"fmt"
 	"io"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 	"os"
 	"time"
 
@@ -54,27 +54,27 @@ type LogFormatter func(params LogFormatterParams) string
 
 // LogFormatterParams is the structure any formatter will be handed when time to log comes
 type LogFormatterParams struct {
-	Request *http.Request
+	Request http.HTTPRequest
 
-	// TimeStamp shows the time after the server returns a response.
+	// TimeStamp shows the time after the server returns a Response.
 	TimeStamp time.Time
-	// StatusCode is HTTP response code.
+	// StatusCode is HTTP Response code.
 	StatusCode int
-	// Latency is how much time the server cost to process a certain request.
+	// Latency is how much time the server cost to process a certain Request.
 	Latency time.Duration
 	// ClientIP equals Context's ClientIP method.
 	ClientIP string
-	// Method is the HTTP method given to the request.
+	// Method is the HTTP method given to the Request.
 	Method string
 	// Path is a path the client requests.
 	Path string
-	// ErrorMessage is set if error has occurred in processing the request.
+	// ErrorMessage is set if error has occurred in processing the Request.
 	ErrorMessage string
 	// isTerm shows whether does gin's output descriptor refers to a terminal.
 	isTerm bool
 	// BodySize is the size of the Response Body
 	BodySize int
-	// Keys are the keys set on the request's context.
+	// Keys are the keys set on the Request's context.
 	Keys map[string]interface{}
 }
 
@@ -234,10 +234,10 @@ func LoggerWithConfig(conf LoggerConfig) HandlerFunc {
 	return func(c *Context) {
 		// Start timer
 		start := time.Now()
-		path := c.Request.URL.Path
-		raw := c.Request.URL.RawQuery
+		path := c.Request.URL().Path()
+		raw := c.Request.URL().RawQuery()
 
-		// Process request
+		// Process Request
 		c.Next()
 
 		// Log only when path is not being skipped
@@ -253,11 +253,11 @@ func LoggerWithConfig(conf LoggerConfig) HandlerFunc {
 			param.Latency = param.TimeStamp.Sub(start)
 
 			param.ClientIP = c.ClientIP()
-			param.Method = c.Request.Method
-			param.StatusCode = c.Writer.Status()
+			param.Method = c.Request.Method()
+			param.StatusCode = c.Response.Status()
 			param.ErrorMessage = c.Errors.ByType(ErrorTypePrivate).String()
 
-			param.BodySize = c.Writer.Size()
+			param.BodySize = (int)(c.Response.Size())
 
 			if raw != "" {
 				path = path + "?" + raw

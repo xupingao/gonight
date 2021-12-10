@@ -176,7 +176,7 @@ func (engine *Engine) NoMethod(handlers ...HandlerFunc) {
 }
 
 // Use attaches a global middleware to the router. ie. the middleware attached though Use() will be
-// included in the handlers chain for every single request. Even 404, 405, static files...
+// included in the handlers chain for every single Request. Even 404, 405, static files...
 // For example, this is the right place for a logger or error management middleware.
 func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes {
 	engine.RouterGroup.Use(middleware...)
@@ -324,8 +324,8 @@ func (engine *Engine) RunListener(listener net.Listener) (err error) {
 func (engine *Engine) ServeHTTP(httpCtx http.Context) {
 	c := engine.pool.Get().(*Context)
 	c.httpCtx = httpCtx
-	c.request = httpCtx.Request()
-	c.response = httpCtx.Response()
+	c.Request = httpCtx.Request()
+	c.Response = httpCtx.Response()
 	if v, ok := httpCtx.Response().(http.HTTP2Response); ok {
 		c.http2Response = v
 	}
@@ -372,7 +372,7 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 			c.Params = value.params
 			c.fullPath = value.fullPath
 			c.Next()
-			c.response.WriteHeaderNow()
+			c.Response.WriteHeaderNow()
 			return
 		}
 		if httpMethod != "CONNECT" && rPath != "/" {
@@ -405,26 +405,26 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 
 
 func serveError(c *Context, code int, defaultMessage []byte) {
-	c.response.WriteHeader(code)
+	c.Response.WriteHeader(code)
 	c.Next()
-	if c.response.HeaderWritten() {
+	if c.Response.HeaderWritten() {
 		return
 	}
-	if c.response.Status() == code {
-		c.response.Header().Set(http.HeaderContentType,http.MIMETextPlain)
-		_, err := c.response.Write(defaultMessage)
+	if c.Response.Status() == code {
+		c.Response.Header().Set(http.HeaderContentType,http.MIMETextPlain)
+		_, err := c.Response.Write(defaultMessage)
 		if err != nil {
 			debugPrint("cannot write message to writer during serve error: %v", err)
 		}
 		return
 	}
-	c.response.WriteHeaderNow()
+	c.Response.WriteHeaderNow()
 }
 
 func redirectTrailingSlash(c *Context) {
-	req := c.request
+	req := c.Request
 	p := req.URL().Path()
-	if prefix := path.Clean(c.request.Header().Get("X-Forwarded-Prefix")); prefix != "." {
+	if prefix := path.Clean(c.Request.Header().Get("X-Forwarded-Prefix")); prefix != "." {
 		p = prefix + "/" + req.URL().Path()
 	}
 	req.URL().SetPath(p + "/")
@@ -435,7 +435,7 @@ func redirectTrailingSlash(c *Context) {
 }
 
 func redirectFixedPath(c *Context, root *node, trailingSlash bool) bool {
-	req := c.request
+	req := c.Request
 	rPath := req.URL().Path()
 
 	if fixedPath, ok := root.findCaseInsensitivePath(cleanPath(rPath), trailingSlash); ok {
@@ -447,15 +447,15 @@ func redirectFixedPath(c *Context, root *node, trailingSlash bool) bool {
 }
 
 func redirectRequest(c *Context) {
-	req := c.request
+	req := c.Request
 	rPath := req.URL().Path()
 	rURL := req.URL().String()
-	code := http.StatusMovedPermanently // Permanent redirect, request with GET method
+	code := http.StatusMovedPermanently // Permanent redirect, Request with GET method
 	if c.Method() != http.MethodGet {
 		code = http.StatusTemporaryRedirect
 	}
-	debugPrint("redirecting request %d: %s --> %s", code, rPath, rURL)
+	debugPrint("redirecting Request %d: %s --> %s", code, rPath, rURL)
 
 	c.httpCtx.Redirect(code, rURL)
-	c.response.WriteHeaderNow()
+	c.Response.WriteHeaderNow()
 }

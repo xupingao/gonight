@@ -52,7 +52,8 @@ func RecoveryWithWriter(out io.Writer) HandlerFunc {
 				}
 				if logger != nil {
 					stack := stack(3)
-					httpRequest, _ := httputil.DumpRequest(c.Request, false)
+					 // todo
+					httpRequest, _ := httputil.DumpRequest(nil, false)
 					headers := strings.Split(string(httpRequest), "\r\n")
 					for idx, header := range headers {
 						current := strings.Split(header, ":")

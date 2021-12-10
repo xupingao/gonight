@@ -12,7 +12,7 @@ func (queryBinding) Name() string {
 }
 
 func (queryBinding) Bind(req http.HTTPRequest, obj interface{}) error {
-	values := req.URL().Query()
+	values := req.URL().Query().All()
 	if err := mapForm(obj, values); err != nil {
 		return err
 	}

@@ -6,9 +6,7 @@ package gonight
 
 import (
 	"net/http"
-	"path"
 	"regexp"
-	"strings"
 )
 
 // IRouter defines all router handle interface includes single and group router.
@@ -31,9 +29,9 @@ type IRoutes interface {
 	OPTIONS(string, ...HandlerFunc) IRoutes
 	HEAD(string, ...HandlerFunc) IRoutes
 
-	StaticFile(string, string) IRoutes
-	Static(string, string) IRoutes
-	StaticFS(string, http.FileSystem) IRoutes
+	//StaticFile(string, string) IRoutes
+	//Static(string, string) IRoutes
+	//StaticFS(string, http.FileSystem) IRoutes
 }
 
 // RouterGroup is used internally to configure router, a RouterGroup is associated with
@@ -76,7 +74,7 @@ func (group *RouterGroup) handle(httpMethod, relativePath string, handlers Handl
 	return group.returnObj()
 }
 
-// Handle registers a new request handle and middleware with the given path and method.
+// Handle registers a new Request handle and middleware with the given path and method.
 // The last handler should be the real handler, the other ones should be middleware that can and should be shared among different routes.
 // See the example code in GitHub.
 //
@@ -145,17 +143,18 @@ func (group *RouterGroup) Any(relativePath string, handlers ...HandlerFunc) IRou
 
 // StaticFile registers a single route in order to serve a single file of the local filesystem.
 // router.StaticFile("favicon.ico", "./resources/favicon.ico")
-func (group *RouterGroup) StaticFile(relativePath, filepath string) IRoutes {
-	if strings.Contains(relativePath, ":") || strings.Contains(relativePath, "*") {
-		panic("URL parameters can not be used when serving a static file")
-	}
-	handler := func(c *Context) {
-		c.File(filepath)
-	}
-	group.GET(relativePath, handler)
-	group.HEAD(relativePath, handler)
-	return group.returnObj()
-}
+// todo
+//func (group *RouterGroup) StaticFile(relativePath, filepath string) IRoutes {
+//	if strings.Contains(relativePath, ":") || strings.Contains(relativePath, "*") {
+//		panic("URL parameters can not be used when serving a static file")
+//	}
+//	handler := func(c *Context) {
+//		c.File(filepath)
+//	}
+//	group.GET(relativePath, handler)
+//	group.HEAD(relativePath, handler)
+//	return group.returnObj()
+//}
 
 // Static serves files from the given file system root.
 // Internally a http.FileServer is used, therefore http.NotFound is used instead
@@ -163,49 +162,50 @@ func (group *RouterGroup) StaticFile(relativePath, filepath string) IRoutes {
 // To use the operating system's file system implementation,
 // use :
 //     router.Static("/static", "/var/www")
-func (group *RouterGroup) Static(relativePath, root string) IRoutes {
-	return group.StaticFS(relativePath, Dir(root, false))
-}
+//func (group *RouterGroup) Static(relativePath, root string) IRoutes {
+//	return group.StaticFS(relativePath, Dir(root, false))
+//}
 
-// StaticFS works just like `Static()` but a custom `http.FileSystem` can be used instead.
-// Gin by default user: gin.Dir()
-func (group *RouterGroup) StaticFS(relativePath string, fs http.FileSystem) IRoutes {
-	if strings.Contains(relativePath, ":") || strings.Contains(relativePath, "*") {
-		panic("URL parameters can not be used when serving a static folder")
-	}
-	handler := group.createStaticHandler(relativePath, fs)
-	urlPattern := path.Join(relativePath, "/*filepath")
+// todo
+//// StaticFS works just like `Static()` but a custom `http.FileSystem` can be used instead.
+//// Gin by default user: gin.Dir()
+//func (group *RouterGroup) StaticFS(relativePath string, fs http.FileSystem) IRoutes {
+//	if strings.Contains(relativePath, ":") || strings.Contains(relativePath, "*") {
+//		panic("URL parameters can not be used when serving a static folder")
+//	}
+//	handler := group.createStaticHandler(relativePath, fs)
+//	urlPattern := path.Join(relativePath, "/*filepath")
+//
+//	// Register GET and HEAD handlers
+//	group.GET(urlPattern, handler)
+//	group.HEAD(urlPattern, handler)
+//	return group.returnObj()
+//}
 
-	// Register GET and HEAD handlers
-	group.GET(urlPattern, handler)
-	group.HEAD(urlPattern, handler)
-	return group.returnObj()
-}
-
-func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
-	absolutePath := group.calculateAbsolutePath(relativePath)
-	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
-
-	return func(c *Context) {
-		if _, nolisting := fs.(*onlyfilesFS); nolisting {
-			c.Writer.WriteHeader(http.StatusNotFound)
-		}
-
-		file := c.Param("filepath")
-		// Check if file exists and/or if we have permission to access it
-		f, err := fs.Open(file)
-		if err != nil {
-			c.Writer.WriteHeader(http.StatusNotFound)
-			c.handlers = group.engine.noRoute
-			// Reset index
-			c.index = -1
-			return
-		}
-		f.Close()
-
-		fileServer.ServeHTTP(c.Writer, c.Request)
-	}
-}
+//func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+//	absolutePath := group.calculateAbsolutePath(relativePath)
+//	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+//
+//	return func(c *Context) {
+//		if _, nolisting := fs.(*onlyfilesFS); nolisting {
+//			c.Response.WriteHeader(http.StatusNotFound)
+//		}
+//
+//		file := c.Param("filepath")
+//		// Check if file exists and/or if we have permission to access it
+//		f, err := fs.Open(file)
+//		if err != nil {
+//			c.Response.WriteHeader(http.StatusNotFound)
+//			c.handlers = group.engine.noRoute
+//			// Reset index
+//			c.index = -1
+//			return
+//		}
+//		f.Close()
+//
+//		fileServer.ServeHTTP(c.Response, c.Request)
+//	}
+//}
 
 func (group *RouterGroup) combineHandlers(handlers HandlersChain) HandlersChain {
 	finalSize := len(group.Handlers) + len(handlers)

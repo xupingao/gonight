@@ -3,9 +3,7 @@ package gonight
 import (
 	"context"
 	"errors"
-	"github.com/gin-contrib/sse"
 	"github.com/xupingao/go-easy-adapt/http"
-	std "net/http"
 	"github.com/xupingao/gonight/binding"
 	"github.com/xupingao/gonight/render"
 	"io"
@@ -13,6 +11,7 @@ import (
 	"math"
 	"mime/multipart"
 	"net"
+	std "net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -32,8 +31,8 @@ const abortIndex int8 = math.MaxInt8 / 2
 
 type Context struct {
 	httpCtx       http.Context
-	request       http.HTTPRequest
-	response      http.HTTPResponse
+	Request       http.HTTPRequest
+	Response      http.HTTPResponse
 	http2Response http.HTTP2Response
 
 	Params   Params
@@ -76,7 +75,7 @@ func (c *Context) reset() {
 //	c.formCache = nil
 //}
 
-// Copy returns a copy of the current context that can be safely used outside the request's scope.
+// Copy returns a copy of the current context that can be safely used outside the Request's scope.
 // This has to be used when the context has to be passed to a goroutine.
 func (c *Context) Copy() *Context {
 	var cp = *c
@@ -98,7 +97,7 @@ func (c *Context) Copy() *Context {
 
 
 /**********************************************************************************************************
-/ Methods to handle the income request
+/ Methods to handle the income Request
 /**********************************************************************************************************/
 
 // HandlerName returns the main handler's name. For example if the handler is "handleGetUsers()",
@@ -139,18 +138,18 @@ func (c *Context) IsAborted() bool {
 }
 
 // Abort prevents pending handlers from being called. Note that this will not stop the current handler.
-// Let's say you have an authorization middleware that validates that the current request is authorized.
+// Let's say you have an authorization middleware that validates that the current Request is authorized.
 // If the authorization fails (ex: the password does not match), call Abort to ensure the remaining handlers
-// for this request are not called.
+// for this Request are not called.
 func (c *Context) Abort() {
 	c.index = abortIndex
 }
 
 // AbortWithStatus calls `Abort()` and writes the headers with the specified status code.
-// For example, a failed attempt to authenticate a request could use: context.AbortWithStatus(401).
+// For example, a failed attempt to authenticate a Request could use: context.AbortWithStatus(401).
 func (c *Context) AbortWithStatus(code int) {
 	c.Status(code)
-	c.response.WriteHeaderNow()
+	c.Response.WriteHeaderNow()
 	c.Abort()
 }
 
@@ -175,9 +174,9 @@ func (c *Context) AbortWithError(code int, err error) *Error {
 /**********************************************************************************************************/
 
 // Error attaches an error to the current context. The error is pushed to a list of errors.
-// It's a good idea to call Error for each error that occurred during the resolution of a request.
+// It's a good idea to call Error for each error that occurred during the resolution of a Request.
 // A middleware can be used to collect all the errors and push them to a database together,
-// print a log, or append it in the HTTP response.
+// print a log, or append it in the HTTP Response.
 // Error will panic if err is nil.
 func (c *Context) Error(err error) *Error {
 	if err == nil {
@@ -316,7 +315,7 @@ func (c *Context) GetStringMapStringSlice(key string) (smss map[string][]string)
 
 // methods
 func (c *Context) Method() string {
-	return c.request.Method()
+	return c.Request.Method()
 }
 
 func (c *Context) IsPost() bool {
@@ -349,7 +348,7 @@ func (c *Context) IsOptions() bool {
 
 // url
 func (c *Context) RequestURL() http.URL {
-	return c.request.URL()
+	return c.Request.URL()
 }
 
 // FullPath returns a matched route full path. For not found routes
@@ -364,7 +363,7 @@ func (c *Context) FullPath() string {
 // Param returns the value of the URL param.
 // It is a shortcut for c.Params.ByName(key)
 //     router.GET("/user/:id", func(c *gin.Context) {
-//         // a GET request to /user/john
+//         // a GET Request to /user/john
 //         id := c.Param("id") // id == "john"
 //     })
 func (c *Context) Param(key string) string {
@@ -424,7 +423,7 @@ func (c *Context) QueryArray(key string) []string {
 // GetQueryArray returns a slice of strings for a given query key, plus
 // a boolean value whether at least one value exists for the given key.
 func (c *Context) GetQueryArray(key string) ([]string, bool) {
-	if values := c.request.Query().Gets(key);len(values) > 0 {
+	if values := c.Request.Query().Gets(key);len(values) > 0 {
 		return values, true
 	}
 	return []string{}, false
@@ -439,7 +438,7 @@ func (c *Context) GetQueryArray(key string) ([]string, bool) {
 //// GetQueryMap returns a map for a given query key, plus a boolean value
 //// whether at least one value exists for the given key.
 //func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
-//	return c.get(c.request.Query(), key)
+//	return c.get(c.Request.Query(), key)
 //}
 
 // PostForm returns the specified key from a POST urlencoded form or multipart form
@@ -462,7 +461,7 @@ func (c *Context) DefaultPostForm(key, defaultValue string) string {
 // GetPostForm is like PostForm(key). It returns the specified key from a POST urlencoded
 // form or multipart form when it exists `(value, true)` (even when the value is an empty string),
 // otherwise it returns ("", false).
-// For example, during a PATCH request to update the user's email:
+// For example, during a PATCH Request to update the user's email:
 //     email=mail@example.com  -->  ("mail@example.com", true) := GetPostForm("email") // set email to "mail@example.com"
 // 	   email=                  -->  ("", true) := GetPostForm("email") // set email to ""
 //                             -->  ("", false) := GetPostForm("email") // do nothing with email
@@ -484,7 +483,7 @@ func (c *Context) PostFormArray(key string) []string {
 // GetPostFormArray returns a slice of strings for a given form key, plus
 // a boolean value whether at least one value exists for the given key.
 func (c *Context) GetPostFormArray(key string) ([]string, bool) {
-	if values := c.request.Form().Gets(key); len(values) > 0 {
+	if values := c.Request.Form().Gets(key); len(values) > 0 {
 		return values, true
 	}
 	return []string{}, false
@@ -523,7 +522,7 @@ func (c *Context) GetPostFormArray(key string) ([]string, bool) {
 // todo
 //// FormFile returns the first file for the provided form key.
 //func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
-//	if c.request.MultipartForm == nil {
+//	if c.Request.MultipartForm == nil {
 //		// pingao
 //		if err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory); err != nil {
 //			return nil, err
@@ -541,7 +540,7 @@ func (c *Context) GetPostFormArray(key string) ([]string, bool) {
 func (c *Context) MultipartForm() (*multipart.Form, error) {
 	//err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory)
 	//return c.Request.MultipartForm, err
-	return c.request.MultipartForm()
+	return c.Request.MultipartForm()
 }
 
 // SaveUploadedFile uploads the form file to specific dst.
@@ -564,12 +563,12 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 
 // GetRawData return stream data.
 func (c *Context) GetRawData() ([]byte, error) {
-	return ioutil.ReadAll(c.request.Body())
+	return ioutil.ReadAll(c.Request.Body())
 }
 
 
 /**********************************************************************************************************
-/ Methods to bind data from request
+/ Methods to bind data from Request
 /**********************************************************************************************************/
 
 // Bind checks the Content-Type to select a binding engine automatically,
@@ -577,11 +576,11 @@ func (c *Context) GetRawData() ([]byte, error) {
 //     "application/json" --> JSON binding
 //     "application/xml"  --> XML binding
 // otherwise --> returns an error.
-// It parses the request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
+// It parses the Request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
 // It decodes the json payload into the struct specified as a pointer.
-// It writes a 400 error and sets Content-Type header "text/plain" in the response if input is not valid.
+// It writes a 400 error and sets Content-Type header "text/plain" in the Response if input is not valid.
 func (c *Context) Bind(obj interface{}) error {
-	b := binding.Default(c.request.Method(), c.ContentType())
+	b := binding.Default(c.Request.Method(), c.ContentType())
 	return c.MustBindWith(obj, b)
 }
 
@@ -611,7 +610,7 @@ func (c *Context) BindHeader(obj interface{}) error {
 }
 
 // BindUri binds the passed struct pointer using binding.Uri.
-// It will abort the request with HTTP 400 if any error occurs.
+// It will abort the Request with HTTP 400 if any error occurs.
 func (c *Context) BindUri(obj interface{}) error {
 	if err := c.ShouldBindUri(obj); err != nil {
 		c.AbortWithError(http.StatusBadRequest, err).SetType(ErrorTypeBind) // nolint: errcheck
@@ -621,7 +620,7 @@ func (c *Context) BindUri(obj interface{}) error {
 }
 
 // MustBindWith binds the passed struct pointer using the specified binding engine.
-// It will abort the request with HTTP 400 if any error occurs.
+// It will abort the Request with HTTP 400 if any error occurs.
 // See the binding package.
 func (c *Context) MustBindWith(obj interface{}, b binding.Binding) error {
 	if err := c.ShouldBindWith(obj, b); err != nil {
@@ -636,11 +635,11 @@ func (c *Context) MustBindWith(obj interface{}, b binding.Binding) error {
 //     "application/json" --> JSON binding
 //     "application/xml"  --> XML binding
 // otherwise --> returns an error
-// It parses the request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
+// It parses the Request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
 // It decodes the json payload into the struct specified as a pointer.
-// Like c.Bind() but this method does not set the response status code to 400 and abort if the json is not valid.
+// Like c.Bind() but this method does not set the Response status code to 400 and abort if the json is not valid.
 func (c *Context) ShouldBind(obj interface{}) error {
-	b := binding.Default(c.request.Method(), c.ContentType())
+	b := binding.Default(c.Request.Method(), c.ContentType())
 	return c.ShouldBindWith(obj, b)
 }
 
@@ -681,10 +680,10 @@ func (c *Context) ShouldBindUri(obj interface{}) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
-	return b.Bind(c.request, obj)
+	return b.Bind(c.Request, obj)
 }
 
-// ShouldBindBodyWith is similar with ShouldBindWith, but it stores the request
+// ShouldBindBodyWith is similar with ShouldBindWith, but it stores the Request
 // body into the context, and reuse when it is called again.
 //
 // NOTE: This method reads the body before binding. So you should use
@@ -697,7 +696,7 @@ func (c *Context) ShouldBindBodyWith(obj interface{}, bb binding.BindingBody) (e
 		}
 	}
 	if body == nil {
-		body, err = ioutil.ReadAll(c.request.Body())
+		body, err = ioutil.ReadAll(c.Request.Body())
 		if err != nil {
 			return err
 		}
@@ -727,19 +726,19 @@ func (c *Context) ClientIP() string {
 		}
 	}
 
-	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.RemoteAddr())); err == nil {
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.Request.RemoteAddr())); err == nil {
 		return ip
 	}
 
 	return ""
 }
 
-// ContentType returns the Content-Type header of the request.
+// ContentType returns the Content-Type header of the Request.
 func (c *Context) ContentType() string {
 	return filterFlags(c.requestHeader("Content-Type"))
 }
 
-// IsWebsocket returns true if the request headers indicate that a websocket
+// IsWebsocket returns true if the Request headers indicate that a websocket
 // handshake is being initiated by the client.
 func (c *Context) IsWebsocket() bool {
 	if strings.Contains(strings.ToLower(c.requestHeader("Connection")), "upgrade") &&
@@ -750,13 +749,13 @@ func (c *Context) IsWebsocket() bool {
 }
 
 func (c *Context) requestHeader(key string) string {
-	return c.request.Header().Get(key)
+	return c.Request.Header().Get(key)
 }
 
 
 
 /**********************************************************************************************************
-/ Methods to write response
+/ Methods to write Response
 /**********************************************************************************************************/
 
 
@@ -773,23 +772,23 @@ func bodyAllowedForStatus(status int) bool {
 	return true
 }
 
-// Status sets the HTTP response code.
+// Status sets the HTTP Response code.
 func (c *Context) Status(code int) {
-	c.response.WriteHeader(code)
+	c.Response.WriteHeader(code)
 }
 
 // Header is a intelligent shortcut for c.Writer.Header().Set(key, value).
-// It writes a header in the response.
+// It writes a header in the Response.
 // If value == "", this method removes the header `c.Writer.Header().Del(key)`
 func (c *Context) Header(key, value string) {
 	if value == "" {
-		c.response.Header().Del(key)
+		c.Response.Header().Del(key)
 		return
 	}
-	c.response.Header().Set(key, value)
+	c.Response.Header().Set(key, value)
 }
 
-// GetHeader returns value from request headers.
+// GetHeader returns value from Request headers.
 func (c *Context) GetHeader(key string) string {
 	return c.requestHeader(key)
 }
@@ -812,7 +811,7 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 	if path == "" {
 		path = "/"
 	}
-	c.response.SetCookie( &std.Cookie{
+	c.Response.SetCookie( &std.Cookie{
 		Name:     name,
 		Value:    url.QueryEscape(value),
 		MaxAge:   maxAge,
@@ -824,30 +823,30 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 	})
 }
 
-// Cookie returns the named cookie provided in the request or
+// Cookie returns the named cookie provided in the Request or
 // ErrNoCookie if not found. And return the named cookie is unescaped.
 // If multiple cookies match the given name, only one cookie will
 // be returned.
 func (c *Context) Cookie(name string) (string, error) {
-	return url.QueryUnescape(c.request.Cookie(name))
+	return url.QueryUnescape(c.Request.Cookie(name))
 }
 
 
 /**********************************************************************************************************
-/ Methods to render response content
+/ Methods to render Response content
 /**********************************************************************************************************/
 
-// Render writes the response headers and calls render.Render to render data.
+// Render writes the Response headers and calls render.Render to render data.
 func (c *Context) Render(code int, r render.Render) {
 	c.Status(code)
 
 	if !bodyAllowedForStatus(code) {
-		r.WriteContentType(c.response)
-		c.response.WriteHeaderNow()
+		r.WriteContentType(c.Response)
+		c.Response.WriteHeaderNow()
 		return
 	}
 
-	if err := r.Render(c.response); err != nil {
+	if err := r.Render(c.Response); err != nil {
 		panic(err)
 	}
 }
@@ -860,7 +859,7 @@ func (c *Context) HTML(code int, name string, obj interface{}) {
 	c.Render(code, instance)
 }
 
-// IndentedJSON serializes the given struct as pretty JSON (indented + endlines) into the response body.
+// IndentedJSON serializes the given struct as pretty JSON (indented + endlines) into the Response body.
 // It also sets the Content-Type as "application/json".
 // WARNING: we recommend to use this only for development purposes since printing pretty JSON is
 // more CPU and bandwidth consuming. Use Context.JSON() instead.
@@ -868,15 +867,15 @@ func (c *Context) IndentedJSON(code int, obj interface{}) {
 	c.Render(code, render.IndentedJSON{Data: obj})
 }
 
-// SecureJSON serializes the given struct as Secure JSON into the response body.
-// Default prepends "while(1)," to response body if the given struct is array values.
+// SecureJSON serializes the given struct as Secure JSON into the Response body.
+// Default prepends "while(1)," to Response body if the given struct is array values.
 // It also sets the Content-Type as "application/json".
 func (c *Context) SecureJSON(code int, obj interface{}) {
 	c.Render(code, render.SecureJSON{Prefix: c.engine.secureJsonPrefix, Data: obj})
 }
 
-// JSONP serializes the given struct as JSON into the response body.
-// It add padding to response body to request data from a server residing in a different domain than the client.
+// JSONP serializes the given struct as JSON into the Response body.
+// It add padding to Response body to Request data from a server residing in a different domain than the client.
 // It also sets the Content-Type as "application/javascript".
 func (c *Context) JSONP(code int, obj interface{}) {
 	callback := c.DefaultQuery("callback", "")
@@ -887,41 +886,41 @@ func (c *Context) JSONP(code int, obj interface{}) {
 	c.Render(code, render.JsonpJSON{Callback: callback, Data: obj})
 }
 
-// JSON serializes the given struct as JSON into the response body.
+// JSON serializes the given struct as JSON into the Response body.
 // It also sets the Content-Type as "application/json".
 func (c *Context) JSON(code int, obj interface{}) {
 	c.Render(code, render.JSON{Data: obj})
 }
 
-// AsciiJSON serializes the given struct as JSON into the response body with unicode to ASCII string.
+// AsciiJSON serializes the given struct as JSON into the Response body with unicode to ASCII string.
 // It also sets the Content-Type as "application/json".
 func (c *Context) AsciiJSON(code int, obj interface{}) {
 	c.Render(code, render.AsciiJSON{Data: obj})
 }
 
-// PureJSON serializes the given struct as JSON into the response body.
+// PureJSON serializes the given struct as JSON into the Response body.
 // PureJSON, unlike JSON, does not replace special html characters with their unicode entities.
 func (c *Context) PureJSON(code int, obj interface{}) {
 	c.Render(code, render.PureJSON{Data: obj})
 }
 
-// XML serializes the given struct as XML into the response body.
+// XML serializes the given struct as XML into the Response body.
 // It also sets the Content-Type as "application/xml".
 func (c *Context) XML(code int, obj interface{}) {
 	c.Render(code, render.XML{Data: obj})
 }
 
-// YAML serializes the given struct as YAML into the response body.
+// YAML serializes the given struct as YAML into the Response body.
 func (c *Context) YAML(code int, obj interface{}) {
 	c.Render(code, render.YAML{Data: obj})
 }
 
-// ProtoBuf serializes the given struct as ProtoBuf into the response body.
+// ProtoBuf serializes the given struct as ProtoBuf into the Response body.
 func (c *Context) ProtoBuf(code int, obj interface{}) {
 	c.Render(code, render.ProtoBuf{Data: obj})
 }
 
-// String writes the given string into the response body.
+// String writes the given string into the Response body.
 func (c *Context) String(code int, format string, values ...interface{}) {
 	c.Render(code, render.String{Format: format, Data: values})
 }
@@ -959,14 +958,14 @@ func (c *Context) DataFromReader(code int, contentLength int64, contentType stri
 //}
 
 // SSEvent writes a Server-Sent Event into the body stream.
-func (c *Context) SSEvent(name string, message interface{}) {
-	c.Render(-1, sse.Event{
-		Event: name,
-		Data:  message,
-	})
-}
+//func (c *Context) SSEvent(name string, message interface{}) {
+//	c.Render(-1, sse.Event{
+//		Event: name,
+//		Data:  message,
+//	})
+//}
 
-//// Stream sends a streaming response and returns a boolean
+//// Stream sends a streaming Response and returns a boolean
 //// indicates "Is client disconnected in middle of stream"
 //func (c *Context) Stream(step func(w io.Writer) bool) bool {
 //	w := c.Writer
@@ -1087,7 +1086,7 @@ func (c *Context) Err() error {
 // the same key returns the same result.
 func (c *Context) Value(key interface{}) interface{} {
 	if key == 0 {
-		return c.request
+		return c.Request
 	}
 	if keyAsString, ok := key.(string); ok {
 		val, _ := c.Get(keyAsString)
