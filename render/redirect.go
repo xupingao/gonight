@@ -6,24 +6,25 @@ package render
 
 import (
 	"fmt"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 )
 
 // Redirect contains the http request reference and redirects status code and location.
 type Redirect struct {
 	Code     int
-	Request  *http.Request
+	Request  http.HTTPRequest
 	Location string
 }
 
 // Render (Redirect) redirects the http request to new location and writes redirect response.
-func (r Redirect) Render(w http.ResponseWriter) error {
+func (r Redirect) Render(w http.HTTPResponse) error {
 	if (r.Code < http.StatusMultipleChoices || r.Code > http.StatusPermanentRedirect) && r.Code != http.StatusCreated {
 		panic(fmt.Sprintf("Cannot redirect with status code %d", r.Code))
 	}
-	http.Redirect(w, r.Request, r.Location, r.Code)
+	// todo
+	//http.Redirect(w, r.Request, r.Location, r.Code)
 	return nil
 }
 
 // WriteContentType (Redirect) don't write any ContentType.
-func (r Redirect) WriteContentType(http.ResponseWriter) {}
+func (r Redirect) WriteContentType(http.HTTPResponse) {}

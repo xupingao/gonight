@@ -9,7 +9,7 @@ package binding
 import (
 	"bytes"
 	"io"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 
 	"github.com/ugorji/go/codec"
 )
@@ -20,8 +20,8 @@ func (msgpackBinding) Name() string {
 	return "msgpack"
 }
 
-func (msgpackBinding) Bind(req *http.Request, obj interface{}) error {
-	return decodeMsgPack(req.Body, obj)
+func (msgpackBinding) Bind(req http.HTTPRequest, obj interface{}) error {
+	return decodeMsgPack(req.Body(), obj)
 }
 
 func (msgpackBinding) BindBody(body []byte, obj interface{}) error {

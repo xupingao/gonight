@@ -1,7 +1,7 @@
 package binding
 
 import (
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 	"net/textproto"
 	"reflect"
 )
@@ -12,9 +12,9 @@ func (headerBinding) Name() string {
 	return "header"
 }
 
-func (headerBinding) Bind(req *http.Request, obj interface{}) error {
+func (headerBinding) Bind(req http.HTTPRequest, obj interface{}) error {
 
-	if err := mapHeader(obj, req.Header); err != nil {
+	if err := mapHeader(obj, req.Header().All()); err != nil {
 		return err
 	}
 

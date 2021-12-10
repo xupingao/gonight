@@ -12,6 +12,6 @@ require (
 	github.com/mattn/go-isatty v0.0.13
 	github.com/stretchr/testify v1.7.0
 	github.com/ugorji/go/codec v1.2.6
-	github.com/xupingao/go-easy-adapt v0.0.0-20210816063018-29703f7884b8
+	github.com/xupingao/go-easy-adapt v0.0.0-20211210060941-382251e828cc
 	gopkg.in/yaml.v2 v2.4.0
 )

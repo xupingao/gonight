@@ -6,7 +6,7 @@ package render
 
 import (
 	"io"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 	"strconv"
 )
 
@@ -19,7 +19,7 @@ type Reader struct {
 }
 
 // Render (Reader) writes data with custom ContentType and headers.
-func (r Reader) Render(w http.ResponseWriter) (err error) {
+func (r Reader) Render(w http.HTTPResponse) (err error) {
 	r.WriteContentType(w)
 	if r.ContentLength >= 0 {
 		if r.Headers == nil {
@@ -33,12 +33,12 @@ func (r Reader) Render(w http.ResponseWriter) (err error) {
 }
 
 // WriteContentType (Reader) writes custom ContentType.
-func (r Reader) WriteContentType(w http.ResponseWriter) {
+func (r Reader) WriteContentType(w http.HTTPResponse) {
 	writeContentType(w, []string{r.ContentType})
 }
 
 // writeHeaders writes custom Header.
-func (r Reader) writeHeaders(w http.ResponseWriter, headers map[string]string) {
+func (r Reader) writeHeaders(w http.HTTPResponse, headers map[string]string) {
 	header := w.Header()
 	for k, v := range headers {
 		if header.Get(k) == "" {

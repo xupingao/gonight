@@ -1,11 +1,17 @@
 package gonight
 
 import (
+	"fmt"
 	//"fmt"
 	"github.com/xupingao/go-easy-adapt/http"
-	"github.com/xupingao/go-easy-adapt/adapters/standard/net_http"
+	"github.com/xupingao/go-easy-adapt/adapters/standard"
+	"github.com/xupingao/gonight/internal/bytesconv"
 	"github.com/xupingao/gonight/render"
 	"html/template"
+	"net"
+	"os"
+	"path"
+
 	//"net"
 	//"os"
 	//"path"
@@ -15,12 +21,6 @@ import (
 )
 
 const defaultMultipartMemory = 32 << 20 // 32 MB
-
-var (
-	default404Body   = []byte("404 page not found")
-	default405Body   = []byte("405 method not allowed")
-	defaultAppEngine bool
-)
 
 type HandlerFunc func(*Context)
 type HandlersChain []HandlerFunc
@@ -45,7 +45,7 @@ type Engine struct {
 	Server http.Server
 	RouterGroup
 
-	//RedirectTrailingSlash  bool
+	RedirectTrailingSlash  bool
 	RedirectFixedPath      bool
 	HandleMethodNotAllowed bool
 	ForwardedByClientIP    bool
@@ -82,7 +82,7 @@ func New(server http.Server) *Engine {
 		RedirectFixedPath:      false,
 		HandleMethodNotAllowed: false,
 		ForwardedByClientIP:    true,
-		AppEngine:              defaultAppEngine,
+		AppEngine:              false,
 		UseRawPath:             false,
 		RemoveExtraSlash:       false,
 		UnescapePathValues:     true,
@@ -100,7 +100,7 @@ func New(server http.Server) *Engine {
 
 // Default returns an Engine instance with the Logger and Recovery middleware already attached.
 func Default() *Engine {
-	engine := New(net_http.NewServer())
+	engine := New(standard.NewDefaultServer())
 	engine.Use(Logger(), Recovery())
 	return engine
 }
@@ -246,64 +246,69 @@ func (engine *Engine) Run(addr ...string) (err error) {
 	return
 }
 
-//// RunTLS attaches the router to a http.Server and starts listening and serving HTTPS (secure) requests.
-//// It is a shortcut for http.ListenAndServeTLS(addr, certFile, keyFile, router)
-//// Note: this method will block the calling goroutine indefinitely unless an error happens.
-//func (engine *Engine) RunTLS(addr, certFile, keyFile string) (err error) {
-//	debugPrint("Listening and serving HTTPS on %s\n", addr)
-//	defer func() { debugPrintError(err) }()
-//	// pingao sign
-//	err = http.ListenAndServeTLS(addr, certFile, keyFile, engine)
-//	return
-//}
-//
-//// RunUnix attaches the router to a http.Server and starts listening and serving HTTP requests
-//// through the specified unix socket (ie. a file).
-//// Note: this method will block the calling goroutine indefinitely unless an error happens.
-//func (engine *Engine) RunUnix(file string) (err error) {
-//	debugPrint("Listening and serving HTTP on unix:/%s", file)
-//	defer func() { debugPrintError(err) }()
-//
-//	os.Remove(file)
-//	listener, err := net.Listen("unix", file)
-//	if err != nil {
-//		return
-//	}
-//	defer listener.Close()
-//	err = os.Chmod(file, 0777)
-//	if err != nil {
-//		return
-//	}
-//	err = http.Serve(listener, engine)
-//	return
-//}
-//
-//// RunFd attaches the router to a http.Server and starts listening and serving HTTP requests
-//// through the specified file descriptor.
-//// Note: this method will block the calling goroutine indefinitely unless an error happens.
-//func (engine *Engine) RunFd(fd int) (err error) {
-//	debugPrint("Listening and serving HTTP on fd@%d", fd)
-//	defer func() { debugPrintError(err) }()
-//
-//	f := os.NewFile(uintptr(fd), fmt.Sprintf("fd@%d", fd))
-//	listener, err := net.FileListener(f)
-//	if err != nil {
-//		return
-//	}
-//	defer listener.Close()
-//	err = engine.RunListener(listener)
-//	return
-//}
-//
-//// RunListener attaches the router to a http.Server and starts listening and serving HTTP requests
-//// through the specified net.Listener
-//func (engine *Engine) RunListener(listener net.Listener) (err error) {
-//	debugPrint("Listening and serving HTTP on listener what's bind with address@%s", listener.Addr())
-//	defer func() { debugPrintError(err) }()
-//	err = http.Serve(listener, engine)
-//	return
-//}
+// RunTLS attaches the router to a http.Server and starts listening and serving HTTPS (secure) requests.
+// It is a shortcut for http.ListenAndServeTLS(addr, certFile, keyFile, router)
+// Note: this method will block the calling goroutine indefinitely unless an error happens.
+func (engine *Engine) RunTLS(addr, certFile, keyFile string) (err error) {
+	debugPrint("Listening and serving HTTPS on %s\n", addr)
+	defer func() { debugPrintError(err) }()
 
+
+	err = engine.Server.ListenAndServeTLS(addr, certFile, keyFile, engine)
+	return
+}
+
+// RunUnix attaches the router to a http.Server and starts listening and serving HTTP requests
+// through the specified unix socket (ie. a file).
+// Note: this method will block the calling goroutine indefinitely unless an error happens.
+func (engine *Engine) RunUnix(file string) (err error) {
+	debugPrint("Listening and serving HTTP on unix:/%s", file)
+	defer func() { debugPrintError(err) }()
+
+	os.Remove(file)
+	listener, err := net.Listen("unix", file)
+	if err != nil {
+		return
+	}
+	defer listener.Close()
+	err = os.Chmod(file, 0777)
+	if err != nil {
+		return
+	}
+	engine.Server.SetListener(listener)
+	engine.Server.SetHandler(engine)
+	err = engine.Server.Run()
+	return
+}
+
+// RunFd attaches the router to a http.Server and starts listening and serving HTTP requests
+// through the specified file descriptor.
+// Note: this method will block the calling goroutine indefinitely unless an error happens.
+func (engine *Engine) RunFd(fd int) (err error) {
+	debugPrint("Listening and serving HTTP on fd@%d", fd)
+	defer func() { debugPrintError(err) }()
+
+	f := os.NewFile(uintptr(fd), fmt.Sprintf("fd@%d", fd))
+	listener, err := net.FileListener(f)
+	if err != nil {
+		return
+	}
+	defer listener.Close()
+	err = engine.RunListener(listener)
+	return
+}
+
+// RunListener attaches the router to a http.Server and starts listening and serving HTTP requests
+// through the specified net.Listener
+func (engine *Engine) RunListener(listener net.Listener) (err error) {
+	debugPrint("Listening and serving HTTP on listener what's bind with address@%s", listener.Addr())
+	defer func() { debugPrintError(err) }()
+	engine.Server.SetListener(listener)
+	engine.Server.SetHandler(engine)
+	err = engine.Server.Run()
+	return
+}
+//
 //// ServeHTTP conforms to the http.Handler interface.
 //func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //	c := engine.pool.Get().(*Context)
@@ -319,6 +324,12 @@ func (engine *Engine) Run(addr ...string) (err error) {
 func (engine *Engine) ServeHTTP(httpCtx http.Context) {
 	c := engine.pool.Get().(*Context)
 	c.httpCtx = httpCtx
+	c.request = httpCtx.Request()
+	c.response = httpCtx.Response()
+	if v, ok := httpCtx.Response().(http.HTTP2Response); ok {
+		c.http2Response = v
+	}
+
 	c.reset()
 	engine.handleHTTPRequest(c)
 	engine.pool.Put(c)
@@ -331,16 +342,15 @@ func (engine *Engine) HandleContext(c *Context) {
 	oldIndexValue := c.index
 	c.reset()
 	engine.handleHTTPRequest(c)
-
 	c.index = oldIndexValue
 }
 
 func (engine *Engine) handleHTTPRequest(c *Context) {
 	httpMethod := c.Method()
-	rPath := c.RequestURL().Path
+	rPath := c.RequestURL().Path()
 	unescape := false
-	if engine.UseRawPath && len(c.RequestURL().RawPath) > 0 {
-		rPath = c.RequestURL().RawPath
+	if engine.UseRawPath && len(c.RequestURL().RawPath()) > 0 {
+		rPath = c.RequestURL().RawPath()
 		unescape = engine.UnescapePathValues
 	}
 
@@ -362,17 +372,17 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 			c.Params = value.params
 			c.fullPath = value.fullPath
 			c.Next()
-			c.writermem.WriteHeaderNow()
+			c.response.WriteHeaderNow()
 			return
 		}
 		if httpMethod != "CONNECT" && rPath != "/" {
-			//if value.tsr && engine.RedirectTrailingSlash {
-			//	redirectTrailingSlash(c)
-			//	return
-			//}
-			//if engine.RedirectFixedPath && redirectFixedPath(c, root, engine.RedirectFixedPath) {
-			//	return
-			//}
+			if value.tsr && engine.RedirectTrailingSlash {
+				redirectTrailingSlash(c)
+				return
+			}
+			if engine.RedirectFixedPath && redirectFixedPath(c, root, engine.RedirectFixedPath) {
+				return
+			}
 		}
 		break
 	}
@@ -384,66 +394,68 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 			}
 			if value := tree.root.getValue(rPath, nil, unescape); value.handlers != nil {
 				c.handlers = engine.allNoMethod
-				serveError(c, http.StatusMethodNotAllowed, default405Body)
+				serveError(c, http.StatusMethodNotAllowed, []byte(http.StatusText(405)))
 				return
 			}
 		}
 	}
 	c.handlers = engine.allNoRoute
-	serveError(c, http.StatusNotFound, default404Body)
+	serveError(c, http.StatusNotFound, []byte(http.StatusText(404)))
 }
 
-var mimePlain = []string{MIMEPlain}
 
 func serveError(c *Context, code int, defaultMessage []byte) {
-	c.writermem.status = code
+	c.response.WriteHeader(code)
 	c.Next()
-	if c.writermem.Written() {
+	if c.response.HeaderWritten() {
 		return
 	}
-	if c.writermem.Status() == code {
-		c.writermem.Header()["Content-Type"] = mimePlain
-		_, err := c.Writer.Write(defaultMessage)
+	if c.response.Status() == code {
+		c.response.Header().Set(http.HeaderContentType,http.MIMETextPlain)
+		_, err := c.response.Write(defaultMessage)
 		if err != nil {
 			debugPrint("cannot write message to writer during serve error: %v", err)
 		}
 		return
 	}
-	c.writermem.WriteHeaderNow()
+	c.response.WriteHeaderNow()
 }
 
-//func redirectTrailingSlash(c *Context) {
-//	req := c.Request
-//	p := req.URL.Path
-//	if prefix := path.Clean(c.Request.Header.Get("X-Forwarded-Prefix")); prefix != "." {
-//		p = prefix + "/" + req.URL.Path
-//	}
-//	req.URL.Path = p + "/"
-//	if length := len(p); length > 1 && p[length-1] == '/' {
-//		req.URL.Path = p[:length-1]
-//	}
-//	redirectRequest(c)
-//}
+func redirectTrailingSlash(c *Context) {
+	req := c.request
+	p := req.URL().Path()
+	if prefix := path.Clean(c.request.Header().Get("X-Forwarded-Prefix")); prefix != "." {
+		p = prefix + "/" + req.URL().Path()
+	}
+	req.URL().SetPath(p + "/")
+	if length := len(p); length > 1 && p[length-1] == '/' {
+		req.URL().SetPath(p[:length-1])
+	}
+	redirectRequest(c)
+}
 
-//func redirectFixedPath(c *Context, root *node, trailingSlash bool) bool {
-//	req := c.Request
-//	rPath := req.URL.Path
-//
-//	if fixedPath, ok := root.findCaseInsensitivePath(cleanPath(rPath), trailingSlash); ok {
-//		req.URL.Path = bytesconv.BytesToString(fixedPath)
-//		redirectRequest(c)
-//		return true
-//	}
-//	return false
-//}
+func redirectFixedPath(c *Context, root *node, trailingSlash bool) bool {
+	req := c.request
+	rPath := req.URL().Path()
 
-func redirectRequest(c *Context, url string) {
+	if fixedPath, ok := root.findCaseInsensitivePath(cleanPath(rPath), trailingSlash); ok {
+		req.URL().SetPath(bytesconv.BytesToString(fixedPath))
+		redirectRequest(c)
+		return true
+	}
+	return false
+}
+
+func redirectRequest(c *Context) {
+	req := c.request
+	rPath := req.URL().Path()
+	rURL := req.URL().String()
 	code := http.StatusMovedPermanently // Permanent redirect, request with GET method
 	if c.Method() != http.MethodGet {
 		code = http.StatusTemporaryRedirect
 	}
-	debugPrint("redirecting request %d: %s --> %s", code, c.RequestURL().Path, url)
-	// pingao
-	c.httpCtx.Redirect(code, url)
-	c.writermem.WriteHeaderNow()
+	debugPrint("redirecting request %d: %s --> %s", code, rPath, rURL)
+
+	c.httpCtx.Redirect(code, rURL)
+	c.response.WriteHeaderNow()
 }

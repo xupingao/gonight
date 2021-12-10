@@ -4,14 +4,16 @@
 
 package render
 
-import "net/http"
+import (
+	"github.com/xupingao/go-easy-adapt/http"
+)
 
 // Render interface is to be implemented by JSON, XML, HTML, YAML and so on.
 type Render interface {
 	// Render writes data with custom ContentType.
-	Render(http.ResponseWriter) error
+	Render(r http.HTTPResponse) error
 	// WriteContentType writes custom ContentType.
-	WriteContentType(w http.ResponseWriter)
+	WriteContentType(r http.HTTPResponse)
 }
 
 var (
@@ -32,9 +34,9 @@ var (
 	_ Render     = ProtoBuf{}
 )
 
-func writeContentType(w http.ResponseWriter, value []string) {
+func writeContentType(w http.HTTPResponse, value []string) {
 	header := w.Header()
-	if val := header["Content-Type"]; len(val) == 0 {
-		header["Content-Type"] = value
+	if val := header.Get(http.HeaderContentType); len(val) == 0 {
+		header.Set(http.HeaderContentType, value[0])
 	}
 }

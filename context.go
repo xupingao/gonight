@@ -1,7 +1,11 @@
 package gonight
 
 import (
+	"context"
+	"errors"
+	"github.com/gin-contrib/sse"
 	"github.com/xupingao/go-easy-adapt/http"
+	std "net/http"
 	"github.com/xupingao/gonight/binding"
 	"github.com/xupingao/gonight/render"
 	"io"
@@ -17,51 +21,43 @@ import (
 
 // Content-Type MIME of the most common data formats.
 const (
-	MIMEJSON              = binding.MIMEJSON
-	MIMEHTML              = binding.MIMEHTML
-	MIMEXML               = binding.MIMEXML
-	MIMEXML2              = binding.MIMEXML2
-	MIMEPlain             = binding.MIMEPlain
-	MIMEPOSTForm          = binding.MIMEPOSTForm
-	MIMEMultipartPOSTForm = binding.MIMEMultipartPOSTForm
-	MIMEYAML              = binding.MIMEYAML
-	BodyBytesKey          = "_gin-gonic/gin/bodybyteskey"
+	BodyBytesKey = "_gin-gonic/gin/bodybyteskey"
 )
 
 const abortIndex int8 = math.MaxInt8 / 2
 
+/**********************************************************************************************************
+/ web context definition
+/**********************************************************************************************************/
 
 type Context struct {
-	httpCtx http.Context   // HTTP 上下文
+	httpCtx       http.Context
+	request       http.HTTPRequest
+	response      http.HTTPResponse
+	http2Response http.HTTP2Response
 
 	Params   Params
 	handlers HandlersChain
-	index    int8           // 当前调用位置
+	index    int8
 
-	engine *Engine          // web engine pointer
-	Keys map[string]interface{}   // 存储在上下位中的键值对
+	engine *Engine                // web engine pointe
+	Keys   map[string]interface{}
 
+
+	fullPath string
 	// Errors is a list of errors attached to all the handlers/middlewares who used this context.
 	Errors errorMsgs
 
 	// Accepted defines a list of manually accepted formats for content negotiation.
 	Accepted []string
 
-	// queryCache use url.ParseQuery cached the param query result from c.Request.URL.Query()
-	queryCache url.Values
-
-	// formCache use url.ParseQuery cached PostForm contains the parsed form data from POST, PATCH,
-	// or PUT body parameters.
-	formCache url.Values
 }
 
-/************************************/
-/********** CONTEXT CREATION ********/
-/************************************/
+/**********************************************************************************************************
+/ context creation
+/**********************************************************************************************************/
 
-
-func (c *Context) reset(httpCtx http.Context) {
-	c.httpCtx = httpCtx
+func (c *Context) reset() {
 	c.handlers = nil
 	c.index = -1
 	c.Keys = nil
@@ -100,9 +96,10 @@ func (c *Context) Copy() *Context {
 	return &cp
 }
 
-func (c *Context) RequestURL() *url.URL {
-	return c.httpCtx.Request().URL()
-}
+
+/**********************************************************************************************************
+/ Methods to handle the income request
+/**********************************************************************************************************/
 
 // HandlerName returns the main handler's name. For example if the handler is "handleGetUsers()",
 // this function will return "main.handleGetUsers".
@@ -124,19 +121,6 @@ func (c *Context) HandlerNames() []string {
 func (c *Context) Handler() HandlerFunc {
 	return c.handlers.Last()
 }
-
-// FullPath returns a matched route full path. For not found routes
-// returns an empty string.
-//     router.GET("/user/:id", func(c *gin.Context) {
-//         c.FullPath() == "/user/:id" // true
-//     })
-func (c *Context) FullPath() string {
-	return c.fullPath
-}
-
-/************************************/
-/*********** FLOW CONTROL ***********/
-/************************************/
 
 // Next should be used only inside middleware.
 // It executes the pending handlers in the chain inside the calling handler.
@@ -166,7 +150,7 @@ func (c *Context) Abort() {
 // For example, a failed attempt to authenticate a request could use: context.AbortWithStatus(401).
 func (c *Context) AbortWithStatus(code int) {
 	c.Status(code)
-	c.Writer.WriteHeaderNow()
+	c.response.WriteHeaderNow()
 	c.Abort()
 }
 
@@ -186,9 +170,9 @@ func (c *Context) AbortWithError(code int, err error) *Error {
 	return c.Error(err)
 }
 
-/************************************/
-/********* ERROR MANAGEMENT *********/
-/************************************/
+/**********************************************************************************************************
+/ Methods to manage the errors
+/**********************************************************************************************************/
 
 // Error attaches an error to the current context. The error is pushed to a list of errors.
 // It's a good idea to call Error for each error that occurred during the resolution of a request.
@@ -212,9 +196,9 @@ func (c *Context) Error(err error) *Error {
 	return parsedError
 }
 
-/************************************/
-/******** METADATA MANAGEMENT********/
-/************************************/
+/**********************************************************************************************************
+/ Methods to manage the metadata
+/**********************************************************************************************************/
 
 // Set is used to store a new key/value pair exclusively for this context.
 // It also lazy initializes  c.Keys if it was not used previously.
@@ -223,10 +207,6 @@ func (c *Context) Set(key string, value interface{}) {
 		c.Keys = make(map[string]interface{})
 	}
 	c.Keys[key] = value
-}
-
-func (c *Context) Method() string {
-	return c.httpCtx.Request().Method()
 }
 
 // Get returns the value for the given key, ie: (value, true).
@@ -332,9 +312,54 @@ func (c *Context) GetStringMapStringSlice(key string) (smss map[string][]string)
 	return
 }
 
-/************************************/
-/************ INPUT DATA ************/
-/************************************/
+
+
+// methods
+func (c *Context) Method() string {
+	return c.request.Method()
+}
+
+func (c *Context) IsPost() bool {
+	return c.Method() == http.MethodPost
+}
+
+func (c *Context) IsGet() bool {
+	return c.Method() == http.MethodGet
+}
+
+func (c *Context) IsPut() bool {
+	return c.Method() == http.MethodPut
+}
+
+func (c *Context) IsDel() bool {
+	return c.Method() == http.MethodDelete
+}
+
+func (c *Context) IsHead() bool {
+	return c.Method() == http.MethodHead
+}
+
+func (c *Context) IsPatch() bool {
+	return c.Method() == http.MethodPatch
+}
+
+func (c *Context) IsOptions() bool {
+	return c.Method() == http.MethodOptions
+}
+
+// url
+func (c *Context) RequestURL() http.URL {
+	return c.request.URL()
+}
+
+// FullPath returns a matched route full path. For not found routes
+// returns an empty string.
+//     router.GET("/user/:id", func(c *gin.Context) {
+//         c.FullPath() == "/user/:id" // true
+//     })
+func (c *Context) FullPath() string {
+	return c.fullPath
+}
 
 // Param returns the value of the URL param.
 // It is a shortcut for c.Params.ByName(key)
@@ -395,34 +420,27 @@ func (c *Context) QueryArray(key string) []string {
 	return values
 }
 
-func (c *Context) getQueryCache() {
-	if c.queryCache == nil {
-		c.queryCache = c.httpCtx.Request().Query()
-	}
-}
 
 // GetQueryArray returns a slice of strings for a given query key, plus
 // a boolean value whether at least one value exists for the given key.
 func (c *Context) GetQueryArray(key string) ([]string, bool) {
-	c.getQueryCache()
-	if values, ok := c.queryCache[key]; ok && len(values) > 0 {
+	if values := c.request.Query().Gets(key);len(values) > 0 {
 		return values, true
 	}
 	return []string{}, false
 }
 
-// QueryMap returns a map for a given query key.
-func (c *Context) QueryMap(key string) map[string]string {
-	dicts, _ := c.GetQueryMap(key)
-	return dicts
-}
-
-// GetQueryMap returns a map for a given query key, plus a boolean value
-// whether at least one value exists for the given key.
-func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
-	c.getQueryCache()
-	return c.get(c.queryCache, key)
-}
+//// QueryMap returns a map for a given query key.
+//func (c *Context) QueryMap(key string) map[string]string {
+//	dicts, _ := c.GetQueryMap(key)
+//	return dicts
+//}
+//
+//// GetQueryMap returns a map for a given query key, plus a boolean value
+//// whether at least one value exists for the given key.
+//func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
+//	return c.get(c.request.Query(), key)
+//}
 
 // PostForm returns the specified key from a POST urlencoded form or multipart form
 // when it exists, otherwise it returns an empty string `("")`.
@@ -462,77 +480,68 @@ func (c *Context) PostFormArray(key string) []string {
 	return values
 }
 
-//func (c *Context) getFormCache() {
-//	if c.formCache == nil {
-//		c.formCache = make(url.Values)
-//		req := c.Request
-//		if err := req.ParseMultipartForm(c.engine.MaxMultipartMemory); err != nil {
-//			if err != http.ErrNotMultipart {
-//				debugPrint("error on parse multipart form array: %v", err)
-//			}
-//		}
-//		c.formCache = req.PostForm
-//	}
-//}
 
 // GetPostFormArray returns a slice of strings for a given form key, plus
 // a boolean value whether at least one value exists for the given key.
 func (c *Context) GetPostFormArray(key string) ([]string, bool) {
-	c.getFormCache()
-	if values := c.formCache[key]; len(values) > 0 {
+	if values := c.request.Form().Gets(key); len(values) > 0 {
 		return values, true
 	}
 	return []string{}, false
 }
 
-// PostFormMap returns a map for a given form key.
-func (c *Context) PostFormMap(key string) map[string]string {
-	dicts, _ := c.GetPostFormMap(key)
-	return dicts
-}
+// todo
+//// PostFormMap returns a map for a given form key.
+//func (c *Context) PostFormMap(key string) map[string]string {
+//	dicts, _ := c.GetPostFormMap(key)
+//	return dicts
+//}
+//
+//// GetPostFormMap returns a map for a given form key, plus a boolean value
+//// whether at least one value exists for the given key.
+//func (c *Context) GetPostFormMap(key string) (map[string]string, bool) {
+//	c.getFormCache()
+//	return c.get(c.formCache, key)
+//}
 
-// GetPostFormMap returns a map for a given form key, plus a boolean value
-// whether at least one value exists for the given key.
-func (c *Context) GetPostFormMap(key string) (map[string]string, bool) {
-	c.getFormCache()
-	return c.get(c.formCache, key)
-}
+//// get is an internal method and returns a map which satisfy conditions.
+//func (c *Context) get(value http.Values, key string) (map[string]string, bool) {
+//	dicts := make(map[string]string)
+//	exist := false
+//	for k, v := range m {
+//		if i := strings.IndexByte(k, '['); i >= 1 && k[0:i] == key {
+//			if j := strings.IndexByte(k[i+1:], ']'); j >= 1 {
+//				exist = true
+//				dicts[k[i+1:][:j]] = v[0]
+//			}
+//		}
+//	}
+//	return dicts, exist
+//}
 
-// get is an internal method and returns a map which satisfy conditions.
-func (c *Context) get(m map[string][]string, key string) (map[string]string, bool) {
-	dicts := make(map[string]string)
-	exist := false
-	for k, v := range m {
-		if i := strings.IndexByte(k, '['); i >= 1 && k[0:i] == key {
-			if j := strings.IndexByte(k[i+1:], ']'); j >= 1 {
-				exist = true
-				dicts[k[i+1:][:j]] = v[0]
-			}
-		}
-	}
-	return dicts, exist
-}
 
-// FormFile returns the first file for the provided form key.
-func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
-	if c.Request.MultipartForm == nil {
-		// pingao
-		if err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory); err != nil {
-			return nil, err
-		}
-	}
-	f, fh, err := c.Request.FormFile(name)
-	if err != nil {
-		return nil, err
-	}
-	f.Close()
-	return fh, err
-}
+// todo
+//// FormFile returns the first file for the provided form key.
+//func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+//	if c.request.MultipartForm == nil {
+//		// pingao
+//		if err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory); err != nil {
+//			return nil, err
+//		}
+//	}
+//	f, fh, err := c.Request.FormFile(name)
+//	if err != nil {
+//		return nil, err
+//	}
+//	f.Close()
+//	return fh, err
+//}
 
 // MultipartForm is the parsed multipart form, including file uploads.
 func (c *Context) MultipartForm() (*multipart.Form, error) {
-	err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory)
-	return c.Request.MultipartForm, err
+	//err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory)
+	//return c.Request.MultipartForm, err
+	return c.request.MultipartForm()
 }
 
 // SaveUploadedFile uploads the form file to specific dst.
@@ -553,6 +562,16 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 	return err
 }
 
+// GetRawData return stream data.
+func (c *Context) GetRawData() ([]byte, error) {
+	return ioutil.ReadAll(c.request.Body())
+}
+
+
+/**********************************************************************************************************
+/ Methods to bind data from request
+/**********************************************************************************************************/
+
 // Bind checks the Content-Type to select a binding engine automatically,
 // Depending the "Content-Type" header different bindings are used:
 //     "application/json" --> JSON binding
@@ -562,7 +581,7 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 // It decodes the json payload into the struct specified as a pointer.
 // It writes a 400 error and sets Content-Type header "text/plain" in the response if input is not valid.
 func (c *Context) Bind(obj interface{}) error {
-	b := binding.Default(c.Request.Method, c.ContentType())
+	b := binding.Default(c.request.Method(), c.ContentType())
 	return c.MustBindWith(obj, b)
 }
 
@@ -621,7 +640,7 @@ func (c *Context) MustBindWith(obj interface{}, b binding.Binding) error {
 // It decodes the json payload into the struct specified as a pointer.
 // Like c.Bind() but this method does not set the response status code to 400 and abort if the json is not valid.
 func (c *Context) ShouldBind(obj interface{}) error {
-	b := binding.Default(c.Request.Method, c.ContentType())
+	b := binding.Default(c.request.Method(), c.ContentType())
 	return c.ShouldBindWith(obj, b)
 }
 
@@ -662,7 +681,7 @@ func (c *Context) ShouldBindUri(obj interface{}) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
-	return b.Bind(c.Request, obj)
+	return b.Bind(c.request, obj)
 }
 
 // ShouldBindBodyWith is similar with ShouldBindWith, but it stores the request
@@ -678,7 +697,7 @@ func (c *Context) ShouldBindBodyWith(obj interface{}, bb binding.BindingBody) (e
 		}
 	}
 	if body == nil {
-		body, err = ioutil.ReadAll(c.Request.Body)
+		body, err = ioutil.ReadAll(c.request.Body())
 		if err != nil {
 			return err
 		}
@@ -708,7 +727,7 @@ func (c *Context) ClientIP() string {
 		}
 	}
 
-	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.Request.RemoteAddr)); err == nil {
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.RemoteAddr())); err == nil {
 		return ip
 	}
 
@@ -731,13 +750,15 @@ func (c *Context) IsWebsocket() bool {
 }
 
 func (c *Context) requestHeader(key string) string {
-	// pingao
-	return c.Request.Header.Get(key)
+	return c.request.Header().Get(key)
 }
 
-/************************************/
-/******** RESPONSE RENDERING ********/
-/************************************/
+
+
+/**********************************************************************************************************
+/ Methods to write response
+/**********************************************************************************************************/
+
 
 // bodyAllowedForStatus is a copy of http.bodyAllowedForStatus non-exported function.
 func bodyAllowedForStatus(status int) bool {
@@ -754,7 +775,7 @@ func bodyAllowedForStatus(status int) bool {
 
 // Status sets the HTTP response code.
 func (c *Context) Status(code int) {
-	c.Writer.WriteHeader(code)
+	c.response.WriteHeader(code)
 }
 
 // Header is a intelligent shortcut for c.Writer.Header().Set(key, value).
@@ -762,10 +783,10 @@ func (c *Context) Status(code int) {
 // If value == "", this method removes the header `c.Writer.Header().Del(key)`
 func (c *Context) Header(key, value string) {
 	if value == "" {
-		c.Writer.Header().Del(key)
+		c.response.Header().Del(key)
 		return
 	}
-	c.Writer.Header().Set(key, value)
+	c.response.Header().Set(key, value)
 }
 
 // GetHeader returns value from request headers.
@@ -773,20 +794,25 @@ func (c *Context) GetHeader(key string) string {
 	return c.requestHeader(key)
 }
 
-// GetRawData return stream data.
-func (c *Context) GetRawData() ([]byte, error) {
-	return ioutil.ReadAll(c.Request.Body)
+// Redirect returns a HTTP redirect to the specific location.
+func (c *Context) Redirect(code int, location string) {
+	c.httpCtx.Redirect(code, location)
+	//c.Render(-1, render.Redirect{
+	//	Code:     code,
+	//	Location: location,
+	//	Request:  c.Request,
+	//})
 }
+
 
 // SetCookie adds a Set-Cookie header to the ResponseWriter's headers.
 // The provided cookie must have a valid Name. Invalid cookies may be
 // silently dropped.
-func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, sameSite http.SameSite, secure, httpOnly bool) {
+func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, sameSite std.SameSite, secure, httpOnly bool) {
 	if path == "" {
 		path = "/"
 	}
-	// pingao
-	http.SetCookie(c.Writer, &http.Cookie{
+	c.response.SetCookie( &std.Cookie{
 		Name:     name,
 		Value:    url.QueryEscape(value),
 		MaxAge:   maxAge,
@@ -803,25 +829,25 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 // If multiple cookies match the given name, only one cookie will
 // be returned.
 func (c *Context) Cookie(name string) (string, error) {
-	cookie, err := c.Request.Cookie(name)
-	if err != nil {
-		return "", err
-	}
-	val, _ := url.QueryUnescape(cookie.Value)
-	return val, nil
+	return url.QueryUnescape(c.request.Cookie(name))
 }
+
+
+/**********************************************************************************************************
+/ Methods to render response content
+/**********************************************************************************************************/
 
 // Render writes the response headers and calls render.Render to render data.
 func (c *Context) Render(code int, r render.Render) {
 	c.Status(code)
 
 	if !bodyAllowedForStatus(code) {
-		r.WriteContentType(c.Writer)
-		c.Writer.WriteHeaderNow()
+		r.WriteContentType(c.response)
+		c.response.WriteHeaderNow()
 		return
 	}
 
-	if err := r.Render(c.Writer); err != nil {
+	if err := r.Render(c.response); err != nil {
 		panic(err)
 	}
 }
@@ -900,14 +926,7 @@ func (c *Context) String(code int, format string, values ...interface{}) {
 	c.Render(code, render.String{Format: format, Data: values})
 }
 
-// Redirect returns a HTTP redirect to the specific location.
-func (c *Context) Redirect(code int, location string) {
-	c.Render(-1, render.Redirect{
-		Code:     code,
-		Location: location,
-		Request:  c.Request,
-	})
-}
+
 
 // Data writes some data into the body stream and updates the HTTP code.
 func (c *Context) Data(code int, contentType string, data []byte) {
@@ -927,17 +946,17 @@ func (c *Context) DataFromReader(code int, contentLength int64, contentType stri
 	})
 }
 
-// File writes the specified file into the body stream in a efficient way.
-func (c *Context) File(filepath string) {
-	http.ServeFile(c.Writer, c.Request, filepath)
-}
-
-// FileAttachment writes the specified file into the body stream in an efficient way
-// On the client side, the file will typically be downloaded with the given filename
-func (c *Context) FileAttachment(filepath, filename string) {
-	c.Writer.Header().Set("content-disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	http.ServeFile(c.Writer, c.Request, filepath)
-}
+//// File writes the specified file into the body stream in a efficient way.
+//func (c *Context) File(filepath string) {
+//	http.ServeFile(c.Writer, c.Request, filepath)
+//}
+//
+//// FileAttachment writes the specified file into the body stream in an efficient way
+//// On the client side, the file will typically be downloaded with the given filename
+//func (c *Context) FileAttachment(filepath, filename string) {
+//	c.Writer.Header().Set("content-disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+//	http.ServeFile(c.Writer, c.Request, filepath)
+//}
 
 // SSEvent writes a Server-Sent Event into the body stream.
 func (c *Context) SSEvent(name string, message interface{}) {
@@ -947,29 +966,28 @@ func (c *Context) SSEvent(name string, message interface{}) {
 	})
 }
 
-// Stream sends a streaming response and returns a boolean
-// indicates "Is client disconnected in middle of stream"
-func (c *Context) Stream(step func(w io.Writer) bool) bool {
-	w := c.Writer
-	clientGone := w.CloseNotify()
-	for {
-		select {
-		case <-clientGone:
-			return true
-		default:
-			keepOpen := step(w)
-			w.Flush()
-			if !keepOpen {
-				return false
-			}
-		}
-	}
-}
+//// Stream sends a streaming response and returns a boolean
+//// indicates "Is client disconnected in middle of stream"
+//func (c *Context) Stream(step func(w io.Writer) bool) bool {
+//	w := c.Writer
+//	clientGone := w.CloseNotify()
+//	for {
+//		select {
+//		case <-clientGone:
+//			return true
+//		default:
+//			keepOpen := step(w)
+//			w.Flush()
+//			if !keepOpen {
+//				return false
+//			}
+//		}
+//	}
+//}
 
-/************************************/
-/******** CONTENT NEGOTIATION *******/
-/************************************/
-
+/**********************************************************************************************************
+/ Methods for content negotiation
+/**********************************************************************************************************/
 // Negotiate contains all negotiations data.
 type Negotiate struct {
 	Offered  []string
@@ -984,19 +1002,19 @@ type Negotiate struct {
 // Negotiate calls different Render according acceptable Accept format.
 func (c *Context) Negotiate(code int, config Negotiate) {
 	switch c.NegotiateFormat(config.Offered...) {
-	case binding.MIMEJSON:
+	case http.MIMEApplicationJSON:
 		data := chooseData(config.JSONData, config.Data)
 		c.JSON(code, data)
 
-	case binding.MIMEHTML:
+	case http.MIMETextHTML:
 		data := chooseData(config.HTMLData, config.Data)
 		c.HTML(code, config.HTMLName, data)
 
-	case binding.MIMEXML:
+	case http.MIMEApplicationXML:
 		data := chooseData(config.XMLData, config.Data)
 		c.XML(code, data)
 
-	case binding.MIMEYAML:
+	case http.MIMEApplicationYAML:
 		data := chooseData(config.YAMLData, config.Data)
 		c.YAML(code, data)
 
@@ -1041,9 +1059,10 @@ func (c *Context) SetAccepted(formats ...string) {
 	c.Accepted = formats
 }
 
-/************************************/
-/***** GOLANG.ORG/X/NET/CONTEXT *****/
-/************************************/
+/**********************************************************************************************************
+/ Implement context.Context)
+/**********************************************************************************************************/
+var _ context.Context = (*Context)(nil)
 
 // Deadline always returns that there is no deadline (ok==false),
 // maybe you want to use Request.Context().Deadline() instead.
@@ -1068,7 +1087,7 @@ func (c *Context) Err() error {
 // the same key returns the same result.
 func (c *Context) Value(key interface{}) interface{} {
 	if key == 0 {
-		return c.Request
+		return c.request
 	}
 	if keyAsString, ok := key.(string); ok {
 		val, _ := c.Get(keyAsString)

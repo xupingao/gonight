@@ -7,8 +7,8 @@ package binding
 import (
 	"bytes"
 	"encoding/xml"
+	"github.com/xupingao/go-easy-adapt/http"
 	"io"
-	"net/http"
 )
 
 type xmlBinding struct{}
@@ -17,8 +17,8 @@ func (xmlBinding) Name() string {
 	return "xml"
 }
 
-func (xmlBinding) Bind(req *http.Request, obj interface{}) error {
-	return decodeXML(req.Body, obj)
+func (xmlBinding) Bind(req http.HTTPRequest, obj interface{}) error {
+	return decodeXML(req.Body(), obj)
 }
 
 func (xmlBinding) BindBody(body []byte, obj interface{}) error {

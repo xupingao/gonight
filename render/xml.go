@@ -6,7 +6,7 @@ package render
 
 import (
 	"encoding/xml"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 )
 
 // XML contains the given interface object.
@@ -17,12 +17,12 @@ type XML struct {
 var xmlContentType = []string{"application/xml; charset=utf-8"}
 
 // Render (XML) encodes the given interface object and writes data with custom ContentType.
-func (r XML) Render(w http.ResponseWriter) error {
+func (r XML) Render(w http.HTTPResponse) error {
 	r.WriteContentType(w)
 	return xml.NewEncoder(w).Encode(r.Data)
 }
 
 // WriteContentType (XML) writes XML ContentType for response.
-func (r XML) WriteContentType(w http.ResponseWriter) {
+func (r XML) WriteContentType(w http.HTTPResponse) {
 	writeContentType(w, xmlContentType)
 }

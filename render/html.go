@@ -6,7 +6,7 @@ package render
 
 import (
 	"html/template"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 )
 
 // Delims represents a set of Left and Right delimiters for HTML template rendering.
@@ -77,7 +77,7 @@ func (r HTMLDebug) loadTemplate() *template.Template {
 }
 
 // Render (HTML) executes template and writes its result with custom ContentType for response.
-func (r HTML) Render(w http.ResponseWriter) error {
+func (r HTML) Render(w http.HTTPResponse) error {
 	r.WriteContentType(w)
 
 	if r.Name == "" {
@@ -87,6 +87,6 @@ func (r HTML) Render(w http.ResponseWriter) error {
 }
 
 // WriteContentType (HTML) writes HTML ContentType.
-func (r HTML) WriteContentType(w http.ResponseWriter) {
+func (r HTML) WriteContentType(w http.HTTPResponse) {
 	writeContentType(w, htmlContentType)
 }

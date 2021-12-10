@@ -4,7 +4,7 @@
 
 package render
 
-import "net/http"
+import "github.com/xupingao/go-easy-adapt/http"
 
 // Data contains ContentType and bytes data.
 type Data struct {
@@ -13,13 +13,13 @@ type Data struct {
 }
 
 // Render (Data) writes data with custom ContentType.
-func (r Data) Render(w http.ResponseWriter) (err error) {
+func (r Data) Render(w http.HTTPResponse) (err error) {
 	r.WriteContentType(w)
 	_, err = w.Write(r.Data)
 	return
 }
 
 // WriteContentType (Data) writes custom ContentType.
-func (r Data) WriteContentType(w http.ResponseWriter) {
+func (r Data) WriteContentType(w http.HTTPResponse) {
 	writeContentType(w, []string{r.ContentType})
 }

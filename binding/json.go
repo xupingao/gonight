@@ -8,9 +8,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net/http"
+	"github.com/xupingao/go-easy-adapt/http"
 
-	"github.com/gin-gonic/gin/internal/json"
+	"github.com/xupingao/gonight/internal/json"
 )
 
 // EnableDecoderUseNumber is used to call the UseNumber method on the JSON
@@ -30,11 +30,11 @@ func (jsonBinding) Name() string {
 	return "json"
 }
 
-func (jsonBinding) Bind(req *http.Request, obj interface{}) error {
-	if req == nil || req.Body == nil {
+func (jsonBinding) Bind(req http.HTTPRequest, obj interface{}) error {
+	if req == nil || req.Body() == nil {
 		return fmt.Errorf("invalid request")
 	}
-	return decodeJSON(req.Body, obj)
+	return decodeJSON(req.Body(), obj)
 }
 
 func (jsonBinding) BindBody(body []byte, obj interface{}) error {

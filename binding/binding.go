@@ -6,29 +6,29 @@
 
 package binding
 
-import "net/http"
+import "github.com/xupingao/go-easy-adapt/http"
 
 // Content-Type MIME of the most common data formats.
-const (
-	MIMEJSON              = "application/json"
-	MIMEHTML              = "text/html"
-	MIMEXML               = "application/xml"
-	MIMEXML2              = "text/xml"
-	MIMEPlain             = "text/plain"
-	MIMEPOSTForm          = "application/x-www-form-urlencoded"
-	MIMEMultipartPOSTForm = "multipart/form-data"
-	MIMEPROTOBUF          = "application/x-protobuf"
-	MIMEMSGPACK           = "application/x-msgpack"
-	MIMEMSGPACK2          = "application/msgpack"
-	MIMEYAML              = "application/x-yaml"
-)
+//const (
+//	MIMEJSON              = "application/json"
+//	MIMEHTML              = "text/html"
+//	MIMEXML               = "application/xml"
+//	MIMEXML2              = "text/xml"
+//	MIMEPlain             = "text/plain"
+//	MIMEPOSTForm          = "application/x-www-form-urlencoded"
+//	MIMEMultipartPOSTForm = "multipart/form-data"
+//	MIMEPROTOBUF          = "application/x-protobuf"
+//	MIMEMSGPACK           = "application/x-msgpack"
+//	MIMEMSGPACK2          = "application/msgpack"
+//	MIMEYAML              = "application/x-yaml"
+//)
 
 // Binding describes the interface which needs to be implemented for binding the
 // data present in the request such as JSON request body, query parameters or
 // the form POST.
 type Binding interface {
 	Name() string
-	Bind(*http.Request, interface{}) error
+	Bind(http.HTTPRequest, interface{}) error
 }
 
 // BindingBody adds BindBody method to Binding. BindBody is similar with Bind,
@@ -75,7 +75,7 @@ var (
 	Form          = formBinding{}
 	Query         = queryBinding{}
 	FormPost      = formPostBinding{}
-	FormMultipart = formMultipartBinding{}
+	//FormMultipart = formMultipartBinding{}
 	ProtoBuf      = protobufBinding{}
 	MsgPack       = msgpackBinding{}
 	YAML          = yamlBinding{}
@@ -91,18 +91,18 @@ func Default(method, contentType string) Binding {
 	}
 
 	switch contentType {
-	case MIMEJSON:
+	case http.MIMEApplicationJSON:
 		return JSON
-	case MIMEXML, MIMEXML2:
+	case http.MIMEApplicationXML, http.MIMETextXML:
 		return XML
-	case MIMEPROTOBUF:
+	case http.MIMEApplicationProtobuf:
 		return ProtoBuf
-	case MIMEMSGPACK, MIMEMSGPACK2:
+	case http.MIMEApplicationMsgpack,http.MIMEApplicationXMsgpack:
 		return MsgPack
-	case MIMEYAML:
+	case http.MIMEApplicationYAML:
 		return YAML
-	case MIMEMultipartPOSTForm:
-		return FormMultipart
+	//case http.MIMEMultipartForm:
+	//	return FormMultipart
 	default: // case MIMEPOSTForm:
 		return Form
 	}
