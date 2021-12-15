@@ -80,6 +80,8 @@ github.com/xupingao/go-easy-adapt v0.0.0-20211209085900-071ea2c150b9 h1:w1fUKpcP
 github.com/xupingao/go-easy-adapt v0.0.0-20211209085900-071ea2c150b9/go.mod h1:0ltP4yZPU2va+cZRZkTbymRRKg/qAB2nRe8+e4r754k=
 github.com/xupingao/go-easy-adapt v0.0.0-20211210060941-382251e828cc h1:Ji1nsJ1uwx70CWfdaDNKWkqvaiEg00PFnnM2BrwoGBs=
 github.com/xupingao/go-easy-adapt v0.0.0-20211210060941-382251e828cc/go.mod h1:0ltP4yZPU2va+cZRZkTbymRRKg/qAB2nRe8+e4r754k=
+github.com/xupingao/go-easy-adapt v0.0.0-20211215065504-7191a7dc9ff3 h1:5gYU7/ts4VYYIegiuAGd/MGctwuJcRnB3QFqSYDt0H4=
+github.com/xupingao/go-easy-adapt v0.0.0-20211215065504-7191a7dc9ff3/go.mod h1:0ltP4yZPU2va+cZRZkTbymRRKg/qAB2nRe8+e4r754k=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a/go.mod h1:P+XmwS30IXTQdn5tA2iutPOUgjI07+tq3H3K9MVA1s8=
