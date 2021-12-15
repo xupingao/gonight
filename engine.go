@@ -65,6 +65,9 @@ type Engine struct {
 	noMethod         HandlersChain
 	pool             sync.Pool
 	trees            methodTrees
+
+	maxParams        uint16
+	maxSections      uint16
 }
 
 var _ IRouter = &Engine{}
@@ -106,7 +109,10 @@ func Default() *Engine {
 }
 
 func (engine *Engine) allocateContext() *Context {
-	return &Context{engine: engine}
+	v := make(Params, 0, engine.maxParams)
+	skippedNodes := make([]skippedNode, 0, engine.maxSections)
+
+	return &Context{engine: engine,params: &v, skippedNodes: &skippedNodes}
 }
 
 // Delims sets template left and right delims and returns a Engine instance.
@@ -206,6 +212,15 @@ func (engine *Engine) addRoute(method, path string, handlers HandlersChain) {
 		engine.trees = append(engine.trees, methodTree{method: method, root: root})
 	}
 	root.addRoute(path, handlers)
+
+	// Update maxParams
+	if paramsCount := countParams(path); paramsCount > engine.maxParams {
+		engine.maxParams = paramsCount
+	}
+
+	if sectionsCount := countSections(path); sectionsCount > engine.maxSections {
+		engine.maxSections = sectionsCount
+	}
 }
 
 // Routes returns a slice of registered routes, including some useful information, such as:
@@ -366,10 +381,13 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 		}
 		root := t[i].root
 		// Find route in tree
-		value := root.getValue(rPath, c.Params, unescape)
+		value := root.getValue(rPath, c.params, c.skippedNodes,unescape)
+		if value.params != nil {
+			c.Params = *value.params
+		}
 		if value.handlers != nil {
 			c.handlers = value.handlers
-			c.Params = value.params
+			c.params = value.params
 			c.fullPath = value.fullPath
 			c.Next()
 			c.Response.WriteHeaderNow()
@@ -392,7 +410,7 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 			if tree.method == httpMethod {
 				continue
 			}
-			if value := tree.root.getValue(rPath, nil, unescape); value.handlers != nil {
+			if value := tree.root.getValue(rPath, nil, c.skippedNodes, unescape); value.handlers != nil {
 				c.handlers = engine.allNoMethod
 				serveError(c, http.StatusMethodNotAllowed, []byte(http.StatusText(405)))
 				return

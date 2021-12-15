@@ -35,13 +35,14 @@ type Context struct {
 	Response      http.HTTPResponse
 	http2Response http.HTTP2Response
 
-	Params   Params
-	handlers HandlersChain
-	index    int8
+	skippedNodes *[]skippedNode
+	Params       Params
+	params       *Params
+	handlers     HandlersChain
+	index        int8
 
-	engine *Engine                // web engine pointe
+	engine *Engine // web engine pointe
 	Keys   map[string]interface{}
-
 
 	fullPath string
 	// Errors is a list of errors attached to all the handlers/middlewares who used this context.
@@ -49,7 +50,6 @@ type Context struct {
 
 	// Accepted defines a list of manually accepted formats for content negotiation.
 	Accepted []string
-
 }
 
 /**********************************************************************************************************
@@ -57,14 +57,17 @@ type Context struct {
 /**********************************************************************************************************/
 
 func (c *Context) reset() {
+	c.Params = c.Params[:0]
 	c.handlers = nil
 	c.index = -1
 	c.Keys = nil
+	*c.params = (*c.params)[:0]
+	*c.skippedNodes = (*c.skippedNodes)[:0]
 }
 
 //func (c *Context) reset() {
 //	c.Writer = &c.writermem
-//	c.Params = c.Params[0:0]
+//	c.params = c.params[0:0]
 //	c.handlers = nil
 //	c.index = -1
 //	c.fullPath = ""
@@ -94,7 +97,6 @@ func (c *Context) Copy() *Context {
 	cp.Params = paramCopy
 	return &cp
 }
-
 
 /**********************************************************************************************************
 / Methods to handle the income Request
@@ -311,8 +313,6 @@ func (c *Context) GetStringMapStringSlice(key string) (smss map[string][]string)
 	return
 }
 
-
-
 // methods
 func (c *Context) Method() string {
 	return c.Request.Method()
@@ -361,13 +361,13 @@ func (c *Context) FullPath() string {
 }
 
 // Param returns the value of the URL param.
-// It is a shortcut for c.Params.ByName(key)
+// It is a shortcut for c.params.ByName(key)
 //     router.GET("/user/:id", func(c *gin.Context) {
 //         // a GET Request to /user/john
 //         id := c.Param("id") // id == "john"
 //     })
 func (c *Context) Param(key string) string {
-	return c.Params.ByName(key)
+	return c.params.ByName(key)
 }
 
 // Query returns the keyed url query value if it exists,
@@ -419,11 +419,10 @@ func (c *Context) QueryArray(key string) []string {
 	return values
 }
 
-
 // GetQueryArray returns a slice of strings for a given query key, plus
 // a boolean value whether at least one value exists for the given key.
 func (c *Context) GetQueryArray(key string) ([]string, bool) {
-	if values := c.Request.Query().Gets(key);len(values) > 0 {
+	if values := c.Request.Query().Gets(key); len(values) > 0 {
 		return values, true
 	}
 	return []string{}, false
@@ -479,7 +478,6 @@ func (c *Context) PostFormArray(key string) []string {
 	return values
 }
 
-
 // GetPostFormArray returns a slice of strings for a given form key, plus
 // a boolean value whether at least one value exists for the given key.
 func (c *Context) GetPostFormArray(key string) ([]string, bool) {
@@ -517,7 +515,6 @@ func (c *Context) GetPostFormArray(key string) ([]string, bool) {
 //	}
 //	return dicts, exist
 //}
-
 
 // todo
 //// FormFile returns the first file for the provided form key.
@@ -565,7 +562,6 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 func (c *Context) GetRawData() ([]byte, error) {
 	return ioutil.ReadAll(c.Request.Body())
 }
-
 
 /**********************************************************************************************************
 / Methods to bind data from Request
@@ -752,12 +748,9 @@ func (c *Context) requestHeader(key string) string {
 	return c.Request.Header().Get(key)
 }
 
-
-
 /**********************************************************************************************************
 / Methods to write Response
 /**********************************************************************************************************/
-
 
 // bodyAllowedForStatus is a copy of http.bodyAllowedForStatus non-exported function.
 func bodyAllowedForStatus(status int) bool {
@@ -803,7 +796,6 @@ func (c *Context) Redirect(code int, location string) {
 	//})
 }
 
-
 // SetCookie adds a Set-Cookie header to the ResponseWriter's headers.
 // The provided cookie must have a valid Name. Invalid cookies may be
 // silently dropped.
@@ -811,7 +803,7 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 	if path == "" {
 		path = "/"
 	}
-	c.Response.SetCookie( &std.Cookie{
+	c.Response.SetCookie(&std.Cookie{
 		Name:     name,
 		Value:    url.QueryEscape(value),
 		MaxAge:   maxAge,
@@ -830,7 +822,6 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 func (c *Context) Cookie(name string) (string, error) {
 	return url.QueryUnescape(c.Request.Cookie(name))
 }
-
 
 /**********************************************************************************************************
 / Methods to render Response content
@@ -924,8 +915,6 @@ func (c *Context) ProtoBuf(code int, obj interface{}) {
 func (c *Context) String(code int, format string, values ...interface{}) {
 	c.Render(code, render.String{Format: format, Data: values})
 }
-
-
 
 // Data writes some data into the body stream and updates the HTTP code.
 func (c *Context) Data(code int, contentType string, data []byte) {
