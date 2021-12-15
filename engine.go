@@ -387,7 +387,6 @@ func (engine *Engine) handleHTTPRequest(c *Context) {
 		}
 		if value.handlers != nil {
 			c.handlers = value.handlers
-			c.params = value.params
 			c.fullPath = value.fullPath
 			c.Next()
 			c.Response.WriteHeaderNow()
