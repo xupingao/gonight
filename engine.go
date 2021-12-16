@@ -101,6 +101,10 @@ func New(server http.Server) *Engine {
 	return engine
 }
 
+func NewWithDefaultServer() *Engine{
+	return New(standard.NewDefaultServer())
+}
+
 // Default returns an Engine instance with the Logger and Recovery middleware already attached.
 func Default() *Engine {
 	engine := New(standard.NewDefaultServer())
